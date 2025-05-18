@@ -1,6 +1,7 @@
 import scala.io.Source
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import java.sql.{Connection, DriverManager, PreparedStatement}
 
 
 object ScalaRuleEngine extends App {
@@ -64,6 +65,41 @@ object ScalaRuleEngine extends App {
     )
   }
 
-  lines.map(maptoOrder).map(x => getFinalPrice(x, rules)).foreach(println)
+
+  def writeOrderToDB(order: Order): Unit = {
+    val url = "jdbc:postgresql://localhost:6432/orders_db"
+    val user = "scala"
+    val password = "scala"
+
+    val connection: Connection = DriverManager.getConnection(url, user, password)
+
+    val sql =
+      """INSERT INTO orders
+        |(transaction_date, product_name, expiry_date, quantity, unit_price, channel, payment_method, discount, final_price)
+        |VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""".stripMargin
+
+    val stmt: PreparedStatement = connection.prepareStatement(sql)
+
+    stmt.setDate(1, java.sql.Date.valueOf(order.transaction_date))
+    stmt.setString(2, order.product_name)
+    stmt.setDate(3, java.sql.Date.valueOf(order.expiry_date))
+    stmt.setInt(4, order.quantity)
+    stmt.setDouble(5, order.unit_price)
+    stmt.setString(6, order.channel)
+    stmt.setString(7, order.payment_method)
+    stmt.setObject(8, order.discount.getOrElse(null))
+    stmt.setObject(9, order.finalprice.getOrElse(null))
+
+
+    stmt.executeUpdate()
+    stmt.close()
+    connection.close()
+  }
+
+  lines
+    .map(maptoOrder)
+    .map(getFinalPrice(_, rules))
+    .foreach(writeOrderToDB)
+
 }
 
