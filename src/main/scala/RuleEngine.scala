@@ -25,7 +25,8 @@ object RuleEngine extends App {
   def is_cheeseorwine(order:Order): Boolean = order.product_name.startsWith("Wine") || order.product_name.startsWith("Cheese")
   def is_soldon23(order:Order): Boolean = order.transaction_date.getMonthValue == 3 && order.transaction_date.getDayOfMonth == 23
   def is_5ofthesame(order:Order): Boolean = order.quantity > 5
-
+  def is_thoughApp(order:Order): Boolean = order.channel.toLowerCase() == "app"
+  def is_byVisa(order: Order): Boolean = order.payment_method.toLowerCase() == "visa"
   //Calculators
   def calc_lessthan30 (order: Order): Double = {
     val days = ChronoUnit.DAYS.between(order.transaction_date, order.expiry_date)
@@ -43,13 +44,18 @@ object RuleEngine extends App {
       case q if q >= 10 => 0.07
       case q if q >= 6  => 0.05
     }
+  def calc_thoughApp(order:Order): Double = (((order.quantity + 4) / 5) * 0.05)
+  def calc_byVisa(order: Order): Double = 0.05
 
-//applying rules to orders
+
+  //applying rules to orders
   val rules: List[(Order => Boolean, Order => Double)] = List(
     (is_lessthan30, calc_lessthan30),
     (is_cheeseorwine, calc_cheeseorwine),
     (is_soldon23, calc_soldon23),
-    (is_5ofthesame, calc_5ofthesame)
+    (is_5ofthesame, calc_5ofthesame),
+    (is_thoughApp, calc_thoughApp),
+    (is_byVisa, calc_byVisa)
 
   )
 
@@ -98,8 +104,8 @@ object RuleEngine extends App {
     stmt.setDouble(5, order.unit_price)
     stmt.setString(6, order.channel)
     stmt.setString(7, order.payment_method)
-    stmt.setObject(8, order.discount.getOrElse(null))
-    stmt.setObject(9, order.finalprice.getOrElse(null))
+    stmt.setObject(8, order.discount.orNull)
+    stmt.setObject(9, order.finalprice.orNull)
 
 
     stmt.executeUpdate()
