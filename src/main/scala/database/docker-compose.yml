@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:13
+    container_name: scala_pg_db
+    environment:
+      POSTGRES_DB: orders_db
+      POSTGRES_USER: scala
+      POSTGRES_PASSWORD: scala
+    ports:
+      - "6432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

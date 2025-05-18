@@ -1,12 +1,18 @@
 import scala.io.Source
+import scala.util.Using
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
-import java.sql.{Connection, DriverManager, PreparedStatement}
+import java.sql.DriverManager
 import RuleEngineLogger.logger
 
-
 object RuleEngine extends App {
-  val lines: List[String] = Source.fromFile("src/main/resources/TRX1000.csv").getLines().drop(1).toList
+  val lines: List[String] = Using(Source.fromFile("src/main/resources/TRX1000.csv")) { source =>
+    source.getLines().drop(1).toList
+  }.getOrElse {
+    logger.severe("Failed to read the file.")
+    List.empty[String]
+  }
+
   case class Order (transaction_date: LocalDate, product_name: String,expiry_date: LocalDate,
                     quantity: Int, unit_price: Double,  channel: String, payment_method: String, discount: Option[Double] = None, finalprice: Option[Double] = None)
 
@@ -71,14 +77,14 @@ object RuleEngine extends App {
     )
   }
 
-
-  def writeOrderToDB(order: Order): Unit = {
+  //database configurations
+  object DBConfig {
     val url = "jdbc:postgresql://localhost:6432/orders_db"
     val user = "scala"
     val password = "scala"
+  }
 
-    val connection: Connection = DriverManager.getConnection(url, user, password)
-
+  def writeOrderToDB(order: Order): Unit = {
     val sql =
       """
         |INSERT INTO orders (
@@ -94,24 +100,24 @@ object RuleEngine extends App {
         |) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       """.stripMargin
 
+    Using.Manager { use =>
+      val connection = use(DriverManager.getConnection(DBConfig.url, DBConfig.user, DBConfig.password))
+      val stmt = use(connection.prepareStatement(sql))
 
-    val stmt: PreparedStatement = connection.prepareStatement(sql)
+      stmt.setDate(1, java.sql.Date.valueOf(order.transaction_date))
+      stmt.setString(2, order.product_name)
+      stmt.setDate(3, java.sql.Date.valueOf(order.expiry_date))
+      stmt.setInt(4, order.quantity)
+      stmt.setDouble(5, order.unit_price)
+      stmt.setString(6, order.channel)
+      stmt.setString(7, order.payment_method)
+      stmt.setObject(8, order.discount.orNull)
+      stmt.setObject(9, order.finalprice.orNull)
 
-    stmt.setDate(1, java.sql.Date.valueOf(order.transaction_date))
-    stmt.setString(2, order.product_name)
-    stmt.setDate(3, java.sql.Date.valueOf(order.expiry_date))
-    stmt.setInt(4, order.quantity)
-    stmt.setDouble(5, order.unit_price)
-    stmt.setString(6, order.channel)
-    stmt.setString(7, order.payment_method)
-    stmt.setObject(8, order.discount.orNull)
-    stmt.setObject(9, order.finalprice.orNull)
-
-
-    stmt.executeUpdate()
-    stmt.close()
-    connection.close()
+      stmt.executeUpdate()
+    }
   }
+
 
   lines.foreach { line =>
     try {
