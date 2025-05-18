@@ -2,9 +2,10 @@ import scala.io.Source
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.sql.{Connection, DriverManager, PreparedStatement}
+import RuleEngineLogger.logger
 
 
-object ScalaRuleEngine extends App {
+object RuleEngine extends App {
   val lines: List[String] = Source.fromFile("src/main/resources/TRX1000.csv").getLines().drop(1).toList
   case class Order (transaction_date: LocalDate, product_name: String,expiry_date: LocalDate,
                     quantity: Int, unit_price: Double,  channel: String, payment_method: String, discount: Option[Double] = None, finalprice: Option[Double] = None)
@@ -18,7 +19,6 @@ object ScalaRuleEngine extends App {
     Order(transactionDate, productName, expiry, quantity.toInt, unitPrice.toDouble, channel, paymentMethod)
   }
 
-//  lines.map(maptoOrder).foreach(println)
 
   //Qualifiers
   def is_lessthan30 (order: Order): Boolean = ChronoUnit.DAYS.between(order.transaction_date, order.expiry_date) < 30
@@ -74,9 +74,20 @@ object ScalaRuleEngine extends App {
     val connection: Connection = DriverManager.getConnection(url, user, password)
 
     val sql =
-      """INSERT INTO orders
-        |(transaction_date, product_name, expiry_date, quantity, unit_price, channel, payment_method, discount, final_price)
-        |VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""".stripMargin
+      """
+        |INSERT INTO orders (
+        |  transaction_date,
+        |  product_name,
+        |  expiry_date,
+        |  quantity,
+        |  unit_price,
+        |  channel,
+        |  payment_method,
+        |  discount,
+        |  final_price
+        |) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      """.stripMargin
+
 
     val stmt: PreparedStatement = connection.prepareStatement(sql)
 
@@ -96,10 +107,23 @@ object ScalaRuleEngine extends App {
     connection.close()
   }
 
-  lines
-    .map(maptoOrder)
-    .map(getFinalPrice(_, rules))
-    .foreach(writeOrderToDB)
+  lines.foreach { line =>
+    try {
+      val order = maptoOrder(line)
+      logger.info(s"Parsed order: $order")
+
+      val pricedOrder = getFinalPrice(order, rules)
+      logger.info(s"Final price calculated: ${pricedOrder.finalprice.getOrElse("N/A")} for ${pricedOrder.product_name}")
+
+      writeOrderToDB(pricedOrder)
+      logger.info(s"Order for ${pricedOrder.product_name} successfully written to DB.")
+
+    } catch {
+      case e: Exception =>
+        logger.severe(s"Failed to process line: $line. Reason: ${e.getMessage}")
+    }
+  }
+
 
 }
 
