@@ -49,4 +49,3 @@ The `RuleEngine` is a Scala application designed to process order data from a CS
 5. **Logging and Error Handling:**
    - The application logs successful operations and errors using a logger.
 
----
