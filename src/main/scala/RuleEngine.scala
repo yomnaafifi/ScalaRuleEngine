@@ -14,8 +14,15 @@ object RuleEngine extends App {
   }
 
   case class Order (transaction_date: LocalDate, product_name: String,expiry_date: LocalDate,
-                    quantity: Int, unit_price: Double,  channel: String, payment_method: String, discount: Option[Double] = None, finalprice: Option[Double] = None)
+                    quantity: Int, unit_price: Double,  channel: String, payment_method: String,
+                    discount: Option[Double] = None, finalprice: Option[Double] = None)
 
+  /**
+   * Parses a CSV line into an Order object.
+   *
+   * @param line A comma-separated string representing order details.
+   * @return An Order instance with parsed fields.
+   */
   def maptoOrder (line:String): Order = {
     val Array(timestamp, productName, expiryDate, quantity, unitPrice, channel, paymentMethod) = line.split(",")
 
@@ -26,20 +33,19 @@ object RuleEngine extends App {
   }
 
 
-  //Qualifiers
+  //Qualifiers: (order => Boolean), takes order as input and checks if they qualify for this discount
   def is_lessthan30 (order: Order): Boolean = ChronoUnit.DAYS.between(order.transaction_date, order.expiry_date) < 30
   def is_cheeseorwine(order:Order): Boolean = order.product_name.startsWith("Wine") || order.product_name.startsWith("Cheese")
   def is_soldon23(order:Order): Boolean = order.transaction_date.getMonthValue == 3 && order.transaction_date.getDayOfMonth == 23
   def is_5ofthesame(order:Order): Boolean = order.quantity > 5
   def is_thoughApp(order:Order): Boolean = order.channel.toLowerCase() == "app"
   def is_byVisa(order: Order): Boolean = order.payment_method.toLowerCase() == "visa"
-  //Calculators
+  
+  //Calculators: (order => Double), calculates the discount based on the qualifiers
   def calc_lessthan30 (order: Order): Double = {
     val days = ChronoUnit.DAYS.between(order.transaction_date, order.expiry_date)
     if (days >=1) (30-days)/100.0 else 0.0
   }
-
-  //extract only the name to match
   def calc_cheeseorwine(order:Order): Double =  order.product_name match {
     case name if name.startsWith("Cheese") => 0.10
     case name if name.startsWith("Wine")   => 0.05
@@ -54,7 +60,7 @@ object RuleEngine extends App {
   def calc_byVisa(order: Order): Double = 0.05
 
 
-  //applying rules to orders
+  //list of rules 
   val rules: List[(Order => Boolean, Order => Double)] = List(
     (is_lessthan30, calc_lessthan30),
     (is_cheeseorwine, calc_cheeseorwine),
@@ -65,7 +71,13 @@ object RuleEngine extends App {
 
   )
 
-  //a function that calculates discount and the final price then add them to the order object
+  /**
+   * Calculates the final price of an order by applying up to two of the highest applicable discounts from the provided rules.
+   *
+   * @param order The order for which the final price is to be calculated.
+   * @param rules A list of tuples, each containing a predicate to determine if the rule applies and a function to compute the discount.
+   * @return A copy of the order with the calculated discount and final price.
+   */
   def getFinalPrice (order: Order, rules:List[(Order => Boolean, Order => Double)]): Order= {
     val discounts = rules.filter(_._1(order)).map(_._2(order)).sorted.reverse.take(2)
     val discount = if (discounts.nonEmpty) discounts.sum / discounts.length else 0.0
@@ -84,6 +96,7 @@ object RuleEngine extends App {
     val password = "scala"
   }
 
+  //takes order as input and writes it to the database  
   def writeOrderToDB(order: Order): Unit = {
     val sql =
       """
@@ -119,6 +132,7 @@ object RuleEngine extends App {
   }
 
 
+  // Process each line from the CSV file:
   lines.foreach { line =>
     try {
       val order = maptoOrder(line)
