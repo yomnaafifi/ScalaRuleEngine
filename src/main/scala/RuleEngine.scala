@@ -14,7 +14,7 @@ object RuleEngine extends App {
   }
 
   case class Order (transaction_date: LocalDate, product_name: String,expiry_date: LocalDate,
-                    quantity: Int, unit_price: Double,  channel: String, payment_method: String,
+                    quantity: Int, unit_price: Double, channel: String, payment_method: String,
                     discount: Option[Double] = None, finalprice: Option[Double] = None)
 
   /**

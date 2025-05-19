@@ -24,7 +24,7 @@ object RuleEngineLogger {
   fileHandler.setFormatter(CustomFormatter)
   logger.addHandler(fileHandler)
 
-  // Optional: stop logging to console
+  //stop logging to console
   logger.setUseParentHandlers(false)
 
   // Set logging level
